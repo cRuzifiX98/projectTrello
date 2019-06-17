@@ -1,10 +1,7 @@
 const fetch = require('node-fetch');
 
 let get = function(url) {
-    return new Promise((resolve, reject) => {
-        let data = fetch(url).then(response => response.json());
-        resolve(data);
-    })
+    return fetch(url).then(response => response.json());
 }
 module.exports.get = get;
 
@@ -16,16 +13,64 @@ module.exports.getId = async function (url, name) {
         }
         return acc;
     }, '');
+    // console.log(id);
     return id;
 }
 
 module.exports.getCards = async function (listId, key, token) {
     let listUrl = 'https://api.trello.com/1/lists/' + listId + '/cards?key=' + key + '&token=' + token;
-    let cardsJsonData = await get(listUrl);
-    console.log(js)
-    return cardsJsonData;
+    let cards = await get(listUrl);
+    // console.log(cardsJsonData)
+    return cards;
 }
 
-// module.exports.getAllChecklistItems = function(cardsJsonData) {
+module.exports.getAllChecklistsIds = function(cardsJsonData) {
+    let checklistIds = cardsJsonData.reduce((acc, currVal) => {
+        acc.push(...(currVal.idChecklists))
+        return acc
+    }, [])
+    return checklistIds;
+}
 
+function getCheckItems(checklistId, key, token) {
+    let checkListUrl = `https://api.trello.com/1/checklists/${checklistId}/checkItems?key=${key}&token=${token}`;
+    return get(checkListUrl);
+}
+
+module.exports.getAllCheckItems = async function(checklistIds, key, token) {
+    let promiseArray = [];
+    for(let i = 0; i < checklistIds.length; i++) {
+        promiseArray[i] = getCheckItems(checklistIds[i], key, token);
+    }
+    // console.log(promiseArray);
+    
+    let checkItemsArray = await Promise.all(promiseArray)
+    .then(promises => {
+        return spreadItems(promises);
+    })
+    .catch(error => console.log('Promise.all not resolving', error));
+    // console.log(checkItemsArray);
+    let data= checkItemsArray.map(item=>item.name);
+    return getCheckData(data);
+}
+
+function spreadItems(nestedData) {
+    let result = nestedData.reduce((checkItems, currCheckList) => {
+        // let checkItemsOfOneList = [];
+        currCheckList.forEach(element => {
+            let checkItem = {
+                name: element.name,
+                state: element.state 
+            }
+            checkItems.push(checkItem);
+        });
+        // checkItems.push(checkItemsOfOneList);
+        return checkItems;
+    }, [])
+    return result;
+}
+function getCheckData(data){
+
+let item=`<li>${data}</li>`
+    return data.map(item=>document.getElementById('trello-items').append(item));
 }
