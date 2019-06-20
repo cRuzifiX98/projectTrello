@@ -1,0 +1,7 @@
+{
+  "extends": ["airbnb", "plugin:prettier/recommended"],
+  "globals": {
+    "fetch": false,
+    "document": false
+  }
+}
