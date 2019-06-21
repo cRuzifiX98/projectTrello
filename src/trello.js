@@ -10,7 +10,7 @@ const put = function put(url) {
 };
 const del = function del(url) {
   return fetch(url, {
-    method: 'delete'
+    method: 'DELETE'
   }).then(response => response.json());
 };
 const post = function post(url) {
@@ -60,22 +60,15 @@ const getAllCheckItems = async function getAllCheckItems(cardIds, key, token) {
     promises[i] = getCheckLists(cardIds[i], key, token);
   }
   checklistArray = await Promise.all(promises);
-  console.log(checklistArray);
-  const checkItemsArray = checklistArray.reduce((checkItems, checklist, index) => {
-    const cardId = cardIds[index];
-    checklist.forEach(() => {
-      checklist[0].checkItems.forEach(element => {
-        const checkItem = {
-          cardId,
-          id: element.id,
-          name: element.name,
-          state: element.state
-        };
-        checkItems.push(checkItem);
-      });
-    });
+  let flattenedArray = (checklistArray.flat());
+  const checkItemsArray = flattenedArray.reduce((checkItems, checklist) => {
+    let cardId = checklist.idCard;
+    (checklist.checkItems).forEach(checkItem => {
+      checkItem['cardId'] = cardId;
+      checkItems.push(checkItem);
+    })
     return checkItems;
-  }, []);
+  }, [])
   return checkItemsArray;
 };
 
@@ -84,92 +77,74 @@ const buildContent = function buildContent(checkItemsArray) {
   const myDiv = document.getElementById('list');
   checkItemsArray.forEach(element => {
     const p = document.createElement('p');
-    p.className = `${element.cardId}`;
-    p.id = `a${element.id}`;
-    p.innerHTML = `<input type=checkbox data-card-id="${element.cardId}" data-id=a${element.id} class ="check-item" id = a${element.id}><label>${element.name}</label><span class = ${element.cardId} id=a${element.id}>&#10005;</span><br>`;
+    p.setAttribute('data-card-id', `${element.cardId}`);
+    p.setAttribute('data-id', `a${element.id}`);
+    p.innerHTML = `<input type=checkbox  class ="checkBox"><label>${element.name}</label><span>&#10005;</span><br>`;
     myDiv.appendChild(p);
     if (element.state === 'complete') {
-      document.querySelector(`#a${element.id}`).classList.add("checked");
-      document.querySelector(`#a${element.id}`).style.cssText =
-        'color: #d3d3d3; text-decoration: line-through #D3D3D3;';
-      document.querySelector(`#a${element.id} #a${element.id}`).checked = true;
+      document.querySelector(`[data-id = a${element.id}]`).classList.add("checkItemsChecked");
+      document.querySelector(`[data-id = a${element.id}] input`).checked = true;
     } else {
-      document.querySelector(`#a${element.id}`).style.cssText =
-        'color: black; text-decoration: none;';
-      document.querySelector(`#a${element.id} #a${element.id}`).checked = false;
+      document.querySelector(`[data-id = a${element.id}]`).classList.add("checkItemsUnchecked");
+      document.querySelector(`[data-id = a${element.id}] input`).checked = false;
     }
   });
   const addButton = document.createElement('p');
-  addButton.innerHTML = '<input class=button type=button value=&#10010>';
+  addButton.innerHTML = '<input class=btn type=button value=&#10010>';
   addButton.addEventListener('click', event => add(event));
   myDiv.appendChild(addButton);
   myDiv.addEventListener('change', event => update(event));
   myDiv.addEventListener('click', event => remove(event));
   document.body.appendChild(myDiv);
-  document.body.style.cssText = 'background-color: #1e90ff;';
-  myDiv.style.cssText = 'background-color: white; width: 35%; margin:auto; padding: 2%';
-  document
-    .querySelectorAll('span')
-    .forEach(element => (element.style.cssText = 'float: right; cursor: pointer'));
 };
 
 //-------------------------------------------------------------------------------------------------------
 async function update(event) {
-  if (event.target.classList.contains('check-item')) {
-    const itemId = event.target.id.slice(1);
-    const cardId = event.target.getAttribute('data-card-id');
-
+  if (event.target.classList.contains('checkBox')) {
+    const itemId = event.target.parentNode.dataset.id.slice(1);
+    const cardId = event.target.parentNode.dataset.cardId;
     event.target.checked ? (state = 'complete') : (state = 'incomplete');
     updateUrl = `https://api.trello.com/1/cards/${cardId}/checkItem/${itemId}?state=${state}&key=${key}&token=${token}`;
-    await put(updateUrl);
-    if (state === 'complete') {
-      document.querySelector(`#${event.target.id}`).style.cssText =
-        'color: #d3d3d3; text-decoration: line-through #D3D3D3;';
-    }
-    if (state === 'incomplete') {
-      document.querySelector(`#${event.target.id}`).style.cssText =
-        'color: black; text-decoration: none;';
+    let response = await put(updateUrl);
+    // console.log(response);
+    if (response.state === 'complete') {
+      document.querySelector(`[data-id = a${response.id}]`).className = 'checkItemsChecked';
+    } else {
+      document.querySelector(`[data-id = a${response.id}]`).className = 'checkItemsUnchecked';
     }
   }
 }
 
 //-------------------------------------------------------------------------------------------------------
 async function remove(event) {
-  // console.log('in remove', event.target)
   if (event.target.nodeName.toLowerCase() === 'span') {
-    const itemId = event.target.id.slice(1);
-    deleteUrl = `https://api.trello.com/1/cards/${event.target.className}/checkItem/${itemId}?key=${key}&token=${token}`;
-    let response = await del(deleteUrl);
-    response = await response.json();
-    document.getElementById(event.target.id).remove();
+    const itemId = event.target.parentNode.dataset.id.slice(1);
+    deleteUrl = `https://api.trello.com/1/cards/${event.target.parentNode.dataset.cardId}/checkItem/${itemId}?key=${key}&token=${token}`;
+    await del(deleteUrl);
+    document.querySelector(`[data-id = ${event.target.parentNode.dataset.id}]`).remove();
   }
-
 }
 
 //-------------------------------------------------------------------------------------------------------
 async function add(event) {
   event.stopPropagation();
-  // console.log('in add', event.target)
-  if (event.target.className === 'button') {
+  if (event.target.className === 'btn') {
     const addItem = document.createElement('p');
     addItem.innerHTML = '<input type=text>';
     addItem.addEventListener('keypress', async event => {
       if (event.which === 13 || event.keyCode === 13) {
         const value = event.target.value;
-        event.target.parentElement.remove();
+        console.log(event.target.parentNode);
+        event.target.parentNode.parentNode.remove();
         const splitValues = value.split(' ');
         const name = splitValues.reduce((string, currVal, idx) => {
-          idx !== splitValues.length - 1 ? (string += `${currVal}%20`) : (string += currVal);
+          (idx !== splitValues.length - 1) ? (string += `${currVal}%20`) : (string += currVal);
           return string;
         }, '');
         const defaultCheckListUrl = `https://api.trello.com/1/checklists/${defaultCheckListId}/checkItems?name=${name}&pos=bottom&checked=false&key=${key}&token=${token}`;
         const newCheckItem = await post(defaultCheckListUrl);
-        console.log(newCheckItem);
-        const cardId = (await get(
-          `https://api.trello.com/1/checklists/${newCheckItem.idChecklist}/cards?key=${key}&token=${token}`
-        ))[0].id;
         const checkItemArray = [{
-          cardId,
+          cardId: defaultCardId,
           id: newCheckItem.id,
           name: newCheckItem.name,
           state: newCheckItem.state
@@ -181,7 +156,6 @@ async function add(event) {
     event.target.remove();
   }
 }
-
 
 // Calling all functions below
 let key = 'a71a2a6e920d2c4de0ff6a3c977dfbca';
